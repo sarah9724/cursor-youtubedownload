@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- 标题和简介 -->
+        <div class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-gray-800 mb-4">YouTube Video Downloader</h1>
+            <p class="text-gray-600">Download your favorite YouTube videos easily and quickly</p>
+        </div>
+
+        <!-- 下载表单 -->
+        <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="flex gap-4">
+                <input type="text" 
+                       id="video-url" 
+                       placeholder="Enter YouTube URL" 
+                       class="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                <button onclick="startDownload()" 
+                        class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                    Download
+                </button>
+            </div>
+            
+            <!-- 下载进度 -->
+            <div id="progress-container" class="hidden mt-4">
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="progress-bar" 
+                         class="bg-blue-500 h-2.5 rounded-full transition-all duration-300" 
+                         style="width: 0%">
+                    </div>
+                </div>
+                <p id="progress-text" class="text-sm text-gray-600 mt-2"></p>
+            </div>
+        </div>
+
+        <!-- 已下载视频列表 -->
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-2xl font-semibold mb-4">Downloaded Videos</h2>
+            <div class="space-y-4">
+                {% for video in videos %}
+                <div class="bg-white rounded-lg shadow-md p-4">
+                    <div class="flex gap-4">
+                        <div class="w-64">
+                            <video controls class="w-full rounded">
+                                <source src="{{ video.filepath }}" type="video/mp4">
+                                Your browser does not support the video tag.
+                            </video>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="text-xl font-semibold mb-2">{{ video.title }}</h3>
+                            <p class="text-gray-600 mb-1">Duration: {{ video.duration }} seconds</p>
+                            <p class="text-gray-600 mb-1">Uploader: {{ video.uploader }}</p>
+                            <p class="text-gray-600 mb-1">File size: {{ video.filesize }} bytes</p>
+                            <p class="text-gray-600 mb-1">Path: {{ video.filepath }}</p>
+                            <p class="text-gray-600 text-sm mt-2 line-clamp-2">{{ video.description }}</p>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://${window.location.host}/ws`);
+            
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.progress) {
+                    document.getElementById("progress-container").classList.remove("hidden");
+                    document.getElementById("progress-bar").style.width = `${data.progress}%`;
+                    document.getElementById("progress-text").textContent = 
+                        `Progress: ${data.progress.toFixed(1)}% - Speed: ${(data.speed/1024/1024).toFixed(2)} MB/s - ETA: ${data.eta}s`;
+                }
+                
+                if (data.status === "completed") {
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                }
+            };
+            
+            ws.onclose = function() {
+                setTimeout(connectWebSocket, 1000);
+            };
+        }
+        
+        async function startDownload() {
+            const url = document.getElementById("video-url").value;
+            if (!url) return;
+            
+            try {
+                const response = await fetch("/download", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                    body: `url=${encodeURIComponent(url)}`
+                });
+                
+                if (response.ok) {
+                    document.getElementById("progress-container").classList.remove("hidden");
+                }
+            } catch (error) {
+                console.error("Error:", error);
+            }
+        }
+        
+        connectWebSocket();
+    </script>
+</body>
+</html>
